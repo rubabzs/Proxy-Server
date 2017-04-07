@@ -13,7 +13,6 @@
 #include <pthread.h>
 #include "queue.c"
 
-
 pthread_cond_t  workers = PTHREAD_COND_INITIALIZER;
 pthread_cond_t  boss = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -77,7 +76,6 @@ void process_request(int client)
   while (!ISspace(buf[j]) && (i < sizeof(url) - 1) && (j < sizeof(buf))) {
     url[i] = buf[j];
     i++; j++;
-    printf("url: in url while");
   }
   url[i] = '\0';
   printf("url: %s", url);
@@ -119,9 +117,8 @@ int get_line(int sock, char *buf, int size)
 	if (c == '\r')
 	  {
 	    n = recv(sock, &c, 1, MSG_PEEK);
-	    if ((n > 0) && (c == '\n')){
-	     recv(sock, &c, 1, 0);
-	    printf("weird c: %c\n", c);}
+	    if ((n > 0) && (c == '\n'))
+	      recv(sock, &c, 1, 0);
 	    else
 	      c = '\n';
 	  }
@@ -132,7 +129,7 @@ int get_line(int sock, char *buf, int size)
       c = '\n';
   }
  buf[i] = '\0';
- printf("buffer: %s", buf);
+ printf("buffer: %s\n", buf);
  return(i);
 }
 
@@ -165,7 +162,7 @@ void send_file(int client, const char *filename)
  char buf[1024];
  char send_buf[1024];
 
- buf[0] = 'A'; buf[1] = '\0'; //why A?
+ buf[0] = 'A'; buf[1] = '\0';
 
  resource = fopen(filename, "r");
  if (resource == NULL)
@@ -174,8 +171,7 @@ void send_file(int client, const char *filename)
  {
    make_header(client, filename);
    fgets(buf, sizeof(buf), resource);
-   while (!feof(resource)) {  //what is feof?
-     //   printf("data: %s\n", buf);
+   while (!feof(resource)) {
      send(client, send_buf, strlen(send_buf), 0);
      fgets(send_buf, sizeof(send_buf), resource);
    }
@@ -202,7 +198,7 @@ int bootstrap(int port)
   error_handle("bind");
  
  // listen pool check
- if (listen(server_sock, MAX_THREADS) < 0) //what is pool?
+ if (listen(server_sock, MAX_THREADS) < 0)
   error_handle("listen");
  return(server_sock);
 }
@@ -210,14 +206,14 @@ int bootstrap(int port)
 
 int main(int argc, char *argv[])
 {
- int server_sock = -1; //
+ int server_sock = -1; 
  int client_sock = -1;
  int port, index;
  int thread_num;
  pthread_attr_t tattr;
  struct sockaddr_in client_name;
  socklen_t client_name_len = sizeof(client_name);
- signal(SIGPIPE,SIG_IGN);  // ??
+ signal(SIGPIPE,SIG_IGN); 
 
  if (argc != 3 || (atoi(argv[1]) < 1024 || atoi(argv[1]) > 65535)) {
    fprintf(stderr, "Usage: server <port number between 1024 to 65535> <number of worker threads>\n");
@@ -227,13 +223,13 @@ int main(int argc, char *argv[])
  port = atoi(argv[1]); 
  thread_num = atoi(argv[2]);
  pthread_t threads[thread_num];
- pthread_attr_init(&tattr);
+ pthread_attr_init(&tattr); //scope in not being used
  pthread_attr_setscope(&tattr, PTHREAD_SCOPE_SYSTEM); 
  server_sock = bootstrap(port);
  printf("web server running on port %d with pool of %d threads\n", port, thread_num);
 
  //initializing pool of threads
- for (index=0; index<=thread_num; index++) {
+ for (index=0; index<thread_num; index++) {
    if (pthread_create(&threads[index], NULL, &worker_function, NULL) != 0)
      error_handle("pthread create");                 
  }
