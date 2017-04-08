@@ -17,8 +17,7 @@ using namespace std;
 #define COMBUF 256  	// maximum command size; can make it variable
 int total_bytes = 100;
 
-void *myClientFunc(void *args)
-{
+void *myClientFunc(void *args) {
   char **argv = (char**)args; 
   
   // variables are defined here
@@ -29,26 +28,42 @@ void *myClientFunc(void *args)
   struct in_addr **ip_addr_list;
   char buffer[COMBUF];
   int  argc, diff, no_of_requests;
- 
+  string URL;
+  string hostname;
+  string port;
+  string proxy_addr;
+  string proxy_port;
+  string path;
   // check that there are enough parameters
-  argc = atoi(argv[3]);
-  if (argc < 5) {
-    fprintf(stderr, "Usage: myclient <hostname> <port number between 1024 and 65535> <no of threads> <no of requests> <set of files>: Success\n\n");
+  argc = atoi(argv[1]);
+  if (argc < 3) {
+    fprintf(stderr, "Usage: myclient <no of threads> [-proxy proxy_addr] <URL>: Success\n\n");
     exit(-1);
   }
+  
+  if (strcmp(argv[2], "-proxy") == 0) {
+    URL = argv[4];
+    path = URL.substr(7, URL.find("\n"));
+    proxy_addr = argv[3];
+    port = proxy_addr.substr(10, 4);
+    port_no = atoi(port.c_str()); 
+    hostname = proxy_addr.substr(0, 9);
+    host_info = gethostbyname(hostname.c_str());
+  }
+  else {
+    URL = argv[2];
+    path = URL.substr(21, URL.find("\n"));
+    port = URL.substr(17, 4);
+    port_no = atoi(port.c_str()); 
+    hostname = URL.substr(7, 9);
+    host_info = gethostbyname(hostname.c_str());
+  }  
 
   // Code
   cout << "Running client...\n";
-  cout << "Will try to connect to " << argv[1] << " at port " << argv[2] << "\n\n";  
-   
-  // string to an integer
-  port_no = atoi(argv[2]); 
-
-  // Resolving Server IP Address
-  host_info = gethostbyname(argv[1]);
-
+  
   if ((host_info == NULL) || (port_no <= 1024) || (port_no >= 65535)) {
-    fprintf(stderr, "Usage: myclient <hostname> <port number between 1024 and 65535> <no of threads> <no of requests> <set of files>: Success\n\n");
+    fprintf(stderr, "Usage: myclient <no of threads> [-proxy proxy_addr] <URL>: Success\n\n");
     exit(-1);
   }
 
@@ -59,7 +74,7 @@ void *myClientFunc(void *args)
 
   ip_addr_list = (struct in_addr **) host_info->h_addr_list;
   inet_pton(AF_INET, inet_ntoa(*ip_addr_list[0]), &server_addr.sin_addr);
-  cout << "hostname: " << argv[1] << " has IP: " << inet_ntoa(*ip_addr_list[0]) << "\n\n"; 
+  cout << "hostname: " << hostname << " has IP: " << inet_ntoa(*ip_addr_list[0]) << "\n\n"; 
 
   // Creating socket
   cout << ".. creating local connector socket\n";
@@ -70,20 +85,17 @@ void *myClientFunc(void *args)
   }
 
   // Establishing connection 
-  cout << ".. connecting socket to " << argv[1] << ":" << argv[2] << "\n";
+  cout << ".. connecting socket to " << hostname << ":" << port << "\n";
   if (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
     cout << "Connection error... exiting: Connection failed\n";
     return NULL;
   }
 
   // send multiple requests to the server
-  no_of_requests = atoi(argv[4]);
+  no_of_requests = atoi(argv[1]);
   for (int j = 0;j < no_of_requests;j++)
     {
-      // find random file from the set of files 
-      diff = argc - 6;
-      file_index =  (int) (((double)(diff+1)/RAND_MAX) * rand() + 5);
-      sprintf(buffer, "GET /%s HTTP/1.1\r\n", argv[file_index]);
+      sprintf(buffer, "GET /%s HTTP/1.1\r\n", path.c_str());
       cout << "\n\n*****************************************************\n";
       cout << buffer; 
       send(socket_fd, buffer, strlen(buffer), 0);
@@ -110,7 +122,7 @@ void *myClientFunc(void *args)
 	cout << "\n*****************************************************\n";
       }
     }
-  close(socket_fd);
+    close(socket_fd);
   return NULL;
 }
 
@@ -118,12 +130,12 @@ void *myClientFunc(void *args)
 int main(int argc, char *argv[])
 {
   int i, no_of_threads;
-  no_of_threads = atoi(argv[3]);
+  no_of_threads = atoi(argv[1]);
   pthread_t tid[no_of_threads];
   srand(time(NULL));
  
   // replacing no_of_threads argument with argc (total number of arguments)
-  sprintf(argv[3], "%d", argc);
+  sprintf(argv[1], "%d", argc);
      
   // Let us create threads
   for (i = 0; i < no_of_threads; i++)
