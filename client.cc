@@ -17,25 +17,69 @@ using namespace std;
 #define COMBUF 256  	// maximum command size; can make it variable
 int total_bytes = 100;
 
-void *myClientFunc(void *args) {
-  char **argv = (char**)args; 
-  
-  // variables are defined here
-  int socket_fd, bytes_recv, total_bytes_recv, port_no, file_index;
+struct arg_struct {
+  string path;
+  int socket_fd;
+  int threads;
+};
+
+void *myClientFunc(void *arguments) {
+
+  struct arg_struct *args = (struct arg_struct *)arguments;
+  int bytes_recv, total_bytes_recv;
+  char buffer[COMBUF];
   char recv_buff[RESBUF];
+  // variables are defined here
+
+  int no_of_requests = args->threads;
+  memset(recv_buff, '0', sizeof(recv_buff));
+  for (int j = 0;j < no_of_requests;j++)
+    {
+      sprintf(buffer, "GET /%s HTTP/1.1\r\n", (args->path).c_str());
+      cout << "\n\n*****************************************************\n";
+      cout << buffer; 
+      send((args->socket_fd), buffer, strlen(buffer), 0);
+      bzero(buffer, sizeof(buffer));
+      bytes_recv = 0;
+      total_bytes_recv = 0;
+      cout << "*****************************************************\n";
+      while((bytes_recv = recv((args->socket_fd), recv_buff, strlen(recv_buff), 0)) > 0){
+	total_bytes_recv = bytes_recv + total_bytes_recv;
+	recv_buff[bytes_recv] = '\0';
+	cout << recv_buff;
+	memset(recv_buff, '0', sizeof(recv_buff));
+      }
+      cout << "*****************************************************\n";
+      if (total_bytes_recv < 0) {
+	cout << "Error: Server not responding\n";
+      }
+      else if (total_bytes_recv == 0) {
+        cout << "Bytes received by client: " << total_bytes;
+	cout << "\n*****************************************************\n";
+      } 
+      else {
+	cout << "Bytes received by client: " << total_bytes_recv;
+	cout << "\n*****************************************************\n";
+      }
+    }
+    close(args->socket_fd);
+  return NULL;
+}
+
+
+int main(int argc, char *argv[])
+{
+  int i, no_of_threads;
+  no_of_threads = atoi(argv[1]);
+  pthread_t tid[no_of_threads];
+  struct arg_struct args;
+  
+  int socket_fd, total_bytes_recv, port_no;
   struct sockaddr_in server_addr;
   struct hostent *host_info;
   struct in_addr **ip_addr_list;
-  char buffer[COMBUF];
-  int  argc, diff, no_of_requests;
-  string URL;
-  string hostname;
-  string port;
-  string proxy_addr;
-  string proxy_port;
-  string path;
-  // check that there are enough parameters
-  argc = atoi(argv[1]);
+  string URL, hostname, port, proxy_addr, proxy_port, path;
+
   if (argc < 3) {
     fprintf(stderr, "Usage: myclient <no of threads> [-proxy proxy_addr] <URL>: Success\n\n");
     exit(-1);
@@ -67,7 +111,6 @@ void *myClientFunc(void *args) {
     exit(-1);
   }
 
-  memset(recv_buff, '0', sizeof(recv_buff));
   memset(&server_addr, '0', sizeof(server_addr));
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons(port_no);
@@ -91,59 +134,17 @@ void *myClientFunc(void *args) {
     return NULL;
   }
 
-  // send multiple requests to the server
-  no_of_requests = atoi(argv[1]);
-  for (int j = 0;j < no_of_requests;j++)
-    {
-      sprintf(buffer, "GET /%s HTTP/1.1\r\n", path.c_str());
-      cout << "\n\n*****************************************************\n";
-      cout << buffer; 
-      send(socket_fd, buffer, strlen(buffer), 0);
-      bzero(buffer, sizeof(buffer));
-      bytes_recv = 0;
-      total_bytes_recv = 0;
-      cout << "*****************************************************\n";
-      while((bytes_recv = recv(socket_fd, recv_buff, strlen(recv_buff), 0)) > 0){
-	total_bytes_recv = bytes_recv + total_bytes_recv;
-	recv_buff[bytes_recv] = '\0';
-	cout << recv_buff;
-	memset(recv_buff, '0', sizeof(recv_buff));
-      }
-      cout << "*****************************************************\n";
-      if (total_bytes_recv < 0) {
-	cout << "Error: Server not responding\n";
-      }
-      else if (total_bytes_recv == 0) {
-        cout << "Bytes received by client: " << total_bytes;
-	cout << "\n*****************************************************\n";
-      } 
-      else {
-	cout << "Bytes received by client: " << total_bytes_recv;
-	cout << "\n*****************************************************\n";
-      }
-    }
-    close(socket_fd);
-  return NULL;
-}
-
-
-int main(int argc, char *argv[])
-{
-  int i, no_of_threads;
-  no_of_threads = atoi(argv[1]);
-  pthread_t tid[no_of_threads];
-  srand(time(NULL));
- 
-  // replacing no_of_threads argument with argc (total number of arguments)
-  sprintf(argv[1], "%d", argc);
-     
+  args.path = path;
+  args.socket_fd = socket_fd;
+  args.threads = atoi(argv[1]);
   // Let us create threads
+  
   for (i = 0; i < no_of_threads; i++)
-    pthread_create(&tid[i], NULL, myClientFunc, (void *) argv);
+    pthread_create(&tid[i], NULL, myClientFunc, (void *) &args);
   
   for (i = 0; i < no_of_threads; i++)
     pthread_join(tid[i], NULL);
 
-  pthread_exit(NULL);
+    pthread_exit(NULL);
   return 0; 
 }
