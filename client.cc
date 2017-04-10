@@ -145,6 +145,6 @@ int main(int argc, char *argv[])
   for (i = 0; i < no_of_threads; i++)
     pthread_join(tid[i], NULL);
 
-    pthread_exit(NULL);
+  pthread_exit(NULL);
   return 0; 
 }

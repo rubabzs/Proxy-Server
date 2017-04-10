@@ -172,7 +172,8 @@ void send_file(int client, const char *filename)
    make_header(client, filename);
    fgets(buf, sizeof(buf), resource);
    while (!feof(resource)) {
-     send(client, send_buf, strlen(send_buf), 0);
+     printf("%d", (int)send(client, send_buf, strlen(send_buf), 0));
+     printf("%s", send_buf);
      fgets(send_buf, sizeof(send_buf), resource);
    }
  }

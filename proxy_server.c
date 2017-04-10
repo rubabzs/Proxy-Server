@@ -20,6 +20,10 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 #define MAX_THREADS 2000
 #define ISspace(x) isspace((int)(x))
 
+int port;
+int server_port;
+char hostname[50];
+
 void process_request(int);
 void error_handle(const char *);
 int get_line(int, char *, int);
@@ -27,6 +31,11 @@ void file_not_found(int);
 void send_file(int, const char *);
 int bootstrap(int);
 void* worker_function(void *);
+int is_local(char *url);
+char* substr(int start, char *str, char delimeter);
+int is_same(char *url);
+char* extract_filename(char *url);
+void contact_server(int client, char *filename);
 
 // main worker function to handle requests
 void* worker_function(void *c) {
@@ -45,7 +54,9 @@ void* worker_function(void *c) {
 
     pthread_mutex_unlock(&mutex);
     process_request(client_sock);
+    close(client_sock);
   }
+
   return NULL;
 }
 
@@ -57,6 +68,7 @@ void process_request(int client)
   char method[255];
   char url[255];
   char path[512];
+  char *filename;
   size_t i, j;
   struct stat st;
  
@@ -79,21 +91,152 @@ void process_request(int client)
   }
   url[i] = '\0';
   printf("url: %s", url);
-  sprintf(path, "files%s", url); //url would be server's name and filename // check if own, yes -> continue else retrieve file first
-  if (path[strlen(path) - 1] == '/')
-    strcat(path, "index.html");
-  if (stat(path, &st) == -1) {
-    file_not_found(client);
+  
+  if (is_local(url) && is_same(url)) {
+    filename = extract_filename(url);
+    send_file(client, filename);
+  } else if (is_local(url) && !is_same(url)) {
+    filename = extract_filename(url);
+    contact_server(client, filename);
   }
-  else {
-    if ((st.st_mode & S_IFMT) == S_IFDIR)
-      strcat(path, "/index.html");
-    send_file(client, path);
- }
   printf("Closing client socket\n");
-  close(client);
 }
 
+
+void contact_server(int client, char *filename) {
+  int socket_fd, bytes_recv, total_bytes_recv;
+  struct sockaddr_in server_addr;
+  struct hostent *host_info;
+  struct in_addr **ip_addr_list;
+  char recv_buff[256];
+  char buffer[256];
+  
+  //resolve_hostname(hostname);
+  memset(&server_addr, '0', sizeof(server_addr));
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_port = htons(server_port);
+  server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+  //inet_pton(AF_INET, , &server_addr.sin_addr); 
+  //  ip_addr_list = (struct in_addr **) host_info->h_addr_list;
+  //inet_pton(AF_INET, inet_ntoa(*ip_addr_list[0]), &server_addr.sin_addr);
+  
+  socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (socket_fd < 0) {
+    error_handle("Error: Socket could not be created\n");
+    return NULL;
+  }
+
+  // Establishing connection                                                                                                                   
+  if (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+    error_handle("Connection error... exiting: Connection failed\n");
+    return NULL;
+  }
+  
+  // send GET request to server
+  sprintf(buffer, "GET /%s HTTP/1.1\r\n", filename);
+  send(socket_fd, buffer, strlen(buffer), 0);
+  printf("going to recv\n");
+
+  while((bytes_recv = recv(socket_fd, recv_buff, 100, 0)) > 0){
+    total_bytes_recv = bytes_recv + total_bytes_recv;
+    recv_buff[bytes_recv] = '\0';
+    printf("in while");
+    send(client, recv_buff, strlen(recv_buff), 0);
+    printf("%s", recv_buff);
+    memset(recv_buff, '0', sizeof(recv_buff));
+  }
+  
+}
+
+char* extract_filename(char *url) {
+  int i, j;
+  char c;
+  char filename[50];
+
+  for(i=1; i<=strlen(url); i++) {
+    c = url[i+1];
+    if (c == '/') {
+      break;
+    }
+  }
+  i++;
+
+  for(j=0; j<=strlen(url); j++) {
+    c = url[i+j+1];
+    if (c == '\n') {
+      break;
+    }
+    *(filename+j) = c;
+  }
+  *(filename+j) = '\0';
+  return filename;
+}
+
+int is_local(char *url) {
+  char host[50];
+  int i;
+  char c;
+  for(i=0; i<=strlen(url); i++) {
+    c = url[i+1];
+    if (c == ':') {
+      break;
+    }
+    host[i] = c;
+  }
+  host[i] = '\0';
+  strcpy(hostname, host);
+  if (strcmp("localhost", host) == 0)
+    return 1;
+  else
+    return 0;
+}
+
+char* substr(int start, char *str, char delimeter) {
+  int i, j = 0;
+  char c;
+  char arr[256];
+  for(i=start; i<=strlen(str); i++) {
+    c = str[i];
+    if (c == delimeter) {
+      printf("yes");
+      break;
+    }
+    arr[j] = c;
+    j++;
+  }
+  arr[j+1] = '\0';
+  return arr;
+}
+
+int is_same(char *url) {
+  char port_no[50];
+  char host[50];
+  int i = 0, j = 0;
+  char c;
+
+  for(j=0; i<=strlen(url); j++) {
+    c = url[j+1];
+    if (c == ':') {
+      break;
+    }
+    host[j] = c;
+  }
+  j++;
+
+  for(i=0; i<=strlen(url); i++) {
+    c = url[i+j+1];
+    if (c == '/') {
+      break;
+    }
+    port_no[i] = c;
+  }
+  port_no[i] = '\0';
+  server_port = atoi(port_no);
+  if (port == server_port)
+    return 1;
+  else
+    return 0;
+}
 
 // handle error
 void error_handle(const char *error)
@@ -135,8 +278,7 @@ int get_line(int sock, char *buf, int size)
 
 
 // making headers for response
-void make_header(int client, const char *filename)
-{
+void make_header(int client, const char *filename) {
  char buf[1024];
  (void)filename;  // why void?
 
@@ -146,8 +288,7 @@ void make_header(int client, const char *filename)
 
 
 // 404: file not found
-void file_not_found(int client)
-{
+void file_not_found(int client) {
  char buf[1024];
 
  sprintf(buf, "HTTP/1.1 404 NOT FOUND\r\n");
@@ -156,17 +297,18 @@ void file_not_found(int client)
 
 
 // send file to client
-void send_file(int client, const char *filename)
-{
+void send_file(int client, const char *filename) {
  FILE *resource = NULL;
  char buf[1024];
  char send_buf[1024];
 
  buf[0] = 'A'; buf[1] = '\0';
-
  resource = fopen(filename, "r");
- if (resource == NULL)
-  file_not_found(client);
+ printf("%s", filename);
+ if (resource == NULL) {
+   printf("file not");
+   file_not_found(client);
+ }
  else
  {
    make_header(client, filename);
@@ -181,8 +323,7 @@ void send_file(int client, const char *filename)
 
 
 // start listening on a specific port
-int bootstrap(int port)
-{
+int bootstrap(int port) {
  int server_sock = 0;
  struct sockaddr_in name;
 
@@ -199,16 +340,15 @@ int bootstrap(int port)
  
  // listen pool check
  if (listen(server_sock, MAX_THREADS) < 0)
-  error_handle("listen");
+   error_handle("listen");
  return(server_sock);
 }
+ 
 
-
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
  int server_sock = -1; 
  int client_sock = -1;
- int port, index;
+ int index;
  int thread_num;
  pthread_attr_t tattr;
  struct sockaddr_in client_name;
@@ -235,7 +375,7 @@ int main(int argc, char *argv[])
      error_handle("pthread create");                 
  }
  printf("%d Threads successfully created\n", index);
- 
+  
  // main loop of boss to accept connections
  while (1) {
    
@@ -254,7 +394,7 @@ int main(int argc, char *argv[])
    pthread_cond_broadcast(&workers);
    pthread_mutex_unlock(&mutex);
  }
-
+ 
  close(server_sock);
  
  return(0);

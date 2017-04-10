@@ -11,7 +11,7 @@ server : server.o
 proxy_server.o : proxy_server.c
 	gcc -W -Wall -c proxy_server.c
 proxy_server : proxy_server.o 
-	gcc -W -Wall proxy_server.o -pthread -o proxy_server	
+	gcc -W -gdb -Wall proxy_server.o -pthread -o proxy_server	
 clean : 
 	rm server server.o client.o client proxy_server proxy_server.o
 
